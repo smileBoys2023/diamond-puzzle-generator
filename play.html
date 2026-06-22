@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>菱形数字谜题 — 答题</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>菱形数字谜题</h1>
+      <p class="subtitle">在空白格中填入数字，完成后点击验证</p>
+    </header>
+
+    <main class="main">
+      <section class="panel puzzle-panel">
+        <div id="targets" class="targets"></div>
+        <div id="puzzle-board" class="puzzle-board"></div>
+        <div class="play-actions">
+          <button type="button" id="verify-btn" class="btn primary">验证答案</button>
+          <button type="button" id="reset-btn" class="btn">清空填写</button>
+          <a href="index.html" class="btn btn-link">返回重新生成</a>
+        </div>
+        <div id="result" class="status" role="status"></div>
+      </section>
+    </main>
+
+    <nav class="nav-links">
+      <a href="calc.html">计算器</a>
+      <a href="index.html">重新生成</a>
+    </nav>
+
+    <footer class="footer">
+      <p>提示：下方相连两数之和等于上方数（底部为三数之和）</p>
+    </footer>
+  </div>
+
+  <script type="module" src="play.js"></script>
+</body>
+</html>
