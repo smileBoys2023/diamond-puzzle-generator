@@ -1,4 +1,4 @@
-import { GIVEN_MASK, PUZZLE_LINKS, BRIDGE_LINKS } from './puzzle.js';
+import { getGivenMask, PUZZLE_LINKS, BRIDGE_LINKS } from './puzzle.js';
 
 const CELL_W = 56;
 const CELL_H = 44;
@@ -22,11 +22,12 @@ function nodeKey(ri, ci) {
 
 /**
  * @param {import('./puzzle.js').PuzzleSolution} solution
- * @param {'play' | 'readonly'} mode
+ * @param {'play' | 'readonly' | 'clues'} mode — clues：仅展示题目已知格，空白显示 ?
  * @returns {{ html: string, totalW: number, totalH: number, nodeMap: Map<string, object> }}
  */
 export function renderPuzzleBoard(solution, mode = 'play') {
   const { rows } = solution;
+  const givenMask = getGivenMask(solution);
   const maxCols = 6;
   const rowYs = rowYPositions(rows.length);
   const totalW = maxCols * CELL_W + PAD * 2;
@@ -47,7 +48,7 @@ export function renderPuzzleBoard(solution, mode = 'play') {
         x: startX + ci * CELL_W + CELL_W / 2,
         y,
         value,
-        given: GIVEN_MASK[ri]?.[ci] ?? false,
+        given: givenMask[ri]?.[ci] ?? false,
       });
     });
   });
@@ -87,6 +88,14 @@ export function renderPuzzleBoard(solution, mode = 'play') {
           </g>`;
       }
 
+      if (mode === 'clues' && !given) {
+        return `
+        <g class="node" data-row="${n.row}" data-col="${n.col}">
+          <rect x="${n.x - 26}" y="${n.y - 20}" width="52" height="40" rx="6" class="cell blank clue-empty" />
+          <text x="${n.x}" y="${n.y + 5}" text-anchor="middle" class="cell-text muted">?</text>
+        </g>`;
+      }
+
       const cls = ['cell', given ? 'given' : 'blank'].join(' ');
       return `
         <g class="node" data-row="${n.row}" data-col="${n.col}">
@@ -111,4 +120,4 @@ export function renderTargets(solution) {
     <div class="target-chip right">右顶目标和 <strong>${solution.rightTop}</strong></div>`;
 }
 
-export { GIVEN_MASK, CELL_W, CELL_H };
+export { CELL_W, CELL_H };

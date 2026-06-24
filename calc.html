@@ -10,67 +10,92 @@
   <div class="app">
     <header class="header">
       <h1>谜题计算器</h1>
-      <p class="subtitle">输入已知条件，一键推算全部格子数值</p>
+      <p class="subtitle">与生成器共用规则，可计算随机题目或手动输入参数</p>
     </header>
 
     <main class="main calc-layout">
       <section class="panel controls-panel">
-        <h2>输入参数</h2>
+        <h2>计算当前题目</h2>
+        <p class="hint">读取答题页题目（含随机已知格位置），推算完整答案。请先在首页生成题目。</p>
+        <div class="actions">
+          <button type="button" id="calc-puzzle-btn" class="btn primary">计算当前题目</button>
+        </div>
+        <div id="puzzle-calc-status" class="status" role="status"></div>
+      </section>
+
+      <section class="panel puzzle-panel calc-result-panel" id="puzzle-result-panel" hidden>
+        <h2>题目与解答</h2>
+        <div id="puzzle-targets" class="targets"></div>
+        <h3 class="calc-subtitle">题目已知格</h3>
+        <div id="puzzle-clue-board" class="puzzle-board"></div>
+        <h3 class="calc-subtitle">完整答案</h3>
+        <div id="puzzle-answer-board" class="puzzle-board"></div>
+        <div class="calc-table-wrap">
+          <h3>逐行明细</h3>
+          <table class="calc-table" id="puzzle-detail-table"></table>
+        </div>
+        <div class="calc-table-wrap">
+          <h3>规则验算</h3>
+          <table class="calc-table verify-table" id="puzzle-verify-table"></table>
+        </div>
+      </section>
+
+      <section class="panel controls-panel">
+        <h2>手动参数计算</h2>
         <form id="calc-form" class="config-form">
           <fieldset class="fieldset">
             <legend>第 5 行已知数</legend>
             <div class="field-row">
-              <label>左端 <input type="number" name="edgeLeft" value="7" step="1" /></label>
-              <label>右二 <input type="number" name="penult" value="3" step="1" /></label>
-              <label>右端 <input type="number" name="edgeRight" value="5" step="1" /></label>
-            </div>
-          </fieldset>
-
-          <fieldset class="fieldset">
-            <legend>顶部目标和</legend>
-            <p class="hint">未填 p、m 时，将据此反推 p、m</p>
-            <div class="field-row">
-              <label>左顶（a + b） <input type="number" name="leftTop" value="146" step="1" /></label>
-              <label>右顶（b + c） <input type="number" name="rightTop" value="141" step="1" /></label>
+              <label>左端 <input type="number" name="edgeLeft" value="7" step="1" min="1" required /></label>
+              <label>右二 <input type="number" name="penult" value="3" step="1" min="1" required /></label>
+              <label>右端 <input type="number" name="edgeRight" value="5" step="1" min="1" required /></label>
             </div>
           </fieldset>
 
           <fieldset class="fieldset">
             <legend>锚点与底目标和</legend>
             <div class="field-row">
-              <label>第 4 行锚点 <input type="number" name="anchor4" value="16" step="1" /></label>
-              <label>第 6 行锚点 <input type="number" name="anchor6" value="8" step="1" /></label>
-              <label>第 7 行目标和 <input type="number" name="bottom" value="15" step="1" /></label>
+              <label>第 4 行锚点 <input type="number" name="anchor4" value="16" step="1" min="1" required /></label>
+              <label>第 6 行锚点 <input type="number" name="anchor6" value="8" step="1" min="1" required /></label>
+              <label>第 7 行目标和 <input type="number" name="bottom" value="15" step="1" min="1" required /></label>
             </div>
           </fieldset>
 
           <fieldset class="fieldset">
-            <legend>第 6 行左右格（可选，优先于顶部目标和）</legend>
+            <legend>顶部目标和（可选）</legend>
+            <p class="hint">未填 p、m 时，可填左顶/右顶反推；均留空则自动选取最小有效 p</p>
+            <div class="field-row">
+              <label>左顶 <input type="number" name="leftTop" placeholder="留空" step="1" /></label>
+              <label>右顶 <input type="number" name="rightTop" placeholder="留空" step="1" /></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend>第 6 行左右格（可选）</legend>
             <p class="hint" id="pm-hint">约束：p + m = 底目标和 − 第6行锚点 = 7</p>
             <div class="field-row">
-              <label>p（左） <input type="number" name="p" placeholder="留空自动推算" step="1" /></label>
-              <label>m（右） <input type="number" name="m" placeholder="留空自动推算" step="1" /></label>
+              <label>p <input type="number" name="p" placeholder="留空" step="1" /></label>
+              <label>m <input type="number" name="m" placeholder="留空" step="1" /></label>
             </div>
           </fieldset>
 
           <div class="actions">
-            <button type="submit" class="btn primary">计算</button>
-            <button type="button" id="reset-defaults" class="btn">恢复默认</button>
+            <button type="submit" class="btn primary">手动计算</button>
+            <button type="button" id="load-current" class="btn">填入当前题目参数</button>
+            <button type="button" id="reset-defaults" class="btn">恢复示例</button>
           </div>
         </form>
         <div id="calc-status" class="status" role="status"></div>
       </section>
 
       <section class="panel puzzle-panel calc-result-panel" id="result-panel" hidden>
-        <h2>计算结果</h2>
+        <h2>手动计算结果</h2>
         <div id="targets" class="targets"></div>
         <div id="puzzle-board" class="puzzle-board"></div>
-
         <div class="calc-table-wrap">
           <h3>逐行明细</h3>
           <table class="calc-table" id="detail-table"></table>
         </div>
-
         <div class="calc-table-wrap">
           <h3>规则验算</h3>
           <table class="calc-table verify-table" id="verify-table"></table>

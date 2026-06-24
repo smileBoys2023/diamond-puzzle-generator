@@ -10,34 +10,25 @@
   <div class="app">
     <header class="header">
       <h1>菱形数字谜题</h1>
-      <p class="subtitle">配置参数后生成题目，进入答题页填写空白格</p>
+      <p class="subtitle">随机生成数值与已知格位置，进入答题页填写空白格</p>
     </header>
 
     <main class="main">
       <section class="panel controls-panel">
-        <h2>生成参数</h2>
+        <h2>生成题目</h2>
         <form id="config-form" class="config-form">
-          <div class="field-row">
-            <label>第 5 行左端 <input type="number" name="edgeLeft" value="7" min="1" /></label>
-            <label>第 5 行右二 <input type="number" name="penult" value="3" min="1" /></label>
-            <label>第 5 行右端 <input type="number" name="edgeRight" value="5" min="1" /></label>
-          </div>
-          <div class="field-row">
-            <label>第 4 行锚点 <input type="number" name="anchor4" value="16" min="1" /></label>
-            <label>第 6 行锚点 <input type="number" name="anchor6" value="8" min="1" /></label>
-            <label>第 7 行目标和 <input type="number" name="bottom" value="15" min="1" /></label>
-          </div>
           <div class="field-row">
             <label>难度
               <select name="difficulty">
-                <option value="easy">简单</option>
+                <option value="easy">简单（数字较小，p、m ≤ 3）</option>
                 <option value="medium" selected>中等</option>
-                <option value="hard">困难</option>
+                <option value="hard">困难（p、m ≥ 2）</option>
               </select>
             </label>
           </div>
+          <p class="hint">每次生成会随机确定数值与<strong>已知格位置</strong>（不再固定在同一格）；难度越高，给出的已知数越少。</p>
           <div class="actions">
-            <button type="submit" class="btn primary">生成题目并开始答题</button>
+            <button type="submit" class="btn primary">随机生成并开始答题</button>
           </div>
         </form>
         <div id="status" class="status" role="status"></div>
@@ -45,7 +36,7 @@
     </main>
 
     <footer class="footer">
-      <p>菱形数字谜题生成器 · <!-- <a href="calc.html" class="footer-link">计算器</a> --> </p>
+      <p>菱形数字谜题生成器 · <a href="calc.html" class="footer-link">计算器</a></p>
     </footer>
   </div>
 

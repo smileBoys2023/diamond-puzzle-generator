@@ -1,4 +1,4 @@
-import { STORAGE_KEY, checkUserAnswers } from './puzzle.js';
+import { STORAGE_KEY, checkUserAnswers, getGivenMask } from './puzzle.js';
 import { renderPuzzleBoard, renderTargets } from './render.js';
 
 const boardEl = document.getElementById('puzzle-board');
@@ -32,6 +32,11 @@ function mountBoard() {
   targetsEl.innerHTML = renderTargets(solution);
   const { html } = renderPuzzleBoard(solution, 'play');
   boardEl.innerHTML = html;
+
+  const mask = getGivenMask(solution);
+  const given = mask.flat().filter(Boolean).length;
+  const blank = mask.flat().filter((v) => !v).length;
+  setResult(`本题已给出 ${given} 个已知数，请填写剩余 ${blank} 个空白格。`, 'info');
 }
 
 function collectUserGrid() {

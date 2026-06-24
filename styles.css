@@ -415,6 +415,24 @@ body {
   margin: 0 auto;
 }
 
+.calc-subtitle {
+  margin: 20px 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.cell-text.muted {
+  fill: var(--muted);
+  font-size: 1.1rem;
+}
+
+.cell.clue-empty {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
 .fieldset {
   border: 1px solid var(--border);
   border-radius: 8px;

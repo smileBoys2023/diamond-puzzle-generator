@@ -1,4 +1,11 @@
-import { solveDiamondPuzzle, verify, toPuzzleSolution } from './solve.js';
+import {
+  solveDiamondPuzzle,
+  solveFromStoredPuzzle,
+  verifyResult,
+  toPuzzleSolution,
+  countGivenCells,
+  STORAGE_KEY,
+} from './puzzle.js';
 import { renderPuzzleBoard, renderTargets } from './render.js';
 
 const form = document.getElementById('calc-form');
@@ -10,6 +17,14 @@ const boardEl = document.getElementById('puzzle-board');
 const detailTable = document.getElementById('detail-table');
 const verifyTable = document.getElementById('verify-table');
 
+const puzzleStatusEl = document.getElementById('puzzle-calc-status');
+const puzzleResultPanel = document.getElementById('puzzle-result-panel');
+const puzzleTargetsEl = document.getElementById('puzzle-targets');
+const puzzleClueBoardEl = document.getElementById('puzzle-clue-board');
+const puzzleAnswerBoardEl = document.getElementById('puzzle-answer-board');
+const puzzleDetailTable = document.getElementById('puzzle-detail-table');
+const puzzleVerifyTable = document.getElementById('puzzle-verify-table');
+
 const ROW_LABELS = [
   '顶部目标和',
   '第 2 行 a, b, c',
@@ -20,15 +35,15 @@ const ROW_LABELS = [
   '第 7 行',
 ];
 
-const DEFAULTS = {
+const EXAMPLE = {
   edgeLeft: 7,
   penult: 3,
   edgeRight: 5,
   anchor4: 16,
   anchor6: 8,
   bottom: 15,
-  leftTop: 146,
-  rightTop: 141,
+  leftTop: '',
+  rightTop: '',
   p: '',
   m: '',
 };
@@ -37,13 +52,13 @@ const SOLVED_FROM_LABEL = {
   tops: '由顶部目标和反推',
   p: '由 p 推算 m',
   m: '由 m 推算 p',
-  pm: '手动指定 p、m',
-  default: '默认 p=2',
+  pm: '题目指定 p、m',
+  auto: '自动选取有效 p',
 };
 
-function setStatus(msg, type = 'info') {
-  statusEl.textContent = msg;
-  statusEl.className = `status ${type}`;
+function setStatus(el, msg, type = 'info') {
+  el.textContent = msg;
+  el.className = `status ${type}`;
 }
 
 function parseOptionalInt(value) {
@@ -61,11 +76,18 @@ function readForm() {
     anchor4: Number(fd.get('anchor4')),
     anchor6: Number(fd.get('anchor6')),
     bottom: Number(fd.get('bottom')),
-    leftTop: Number(fd.get('leftTop')),
-    rightTop: Number(fd.get('rightTop')),
+    leftTop: parseOptionalInt(fd.get('leftTop')),
+    rightTop: parseOptionalInt(fd.get('rightTop')),
     p: parseOptionalInt(fd.get('p')),
     m: parseOptionalInt(fd.get('m')),
   };
+}
+
+function fillForm(values) {
+  Object.entries(values).forEach(([k, v]) => {
+    if (form.elements[k]) form.elements[k].value = v;
+  });
+  updatePmHint();
 }
 
 function updatePmHint() {
@@ -74,8 +96,8 @@ function updatePmHint() {
   pmHint.textContent = `约束：p + m = 底目标和 − 第6行锚点 = ${bottom - anchor6}`;
 }
 
-function renderDetailTable(result) {
-  detailTable.innerHTML = result.rows
+function renderDetailTable(tableEl, result) {
+  tableEl.innerHTML = result.rows
     .map(
       (row, i) => `
     <tr>
@@ -86,8 +108,8 @@ function renderDetailTable(result) {
     .join('');
 }
 
-function renderVerifyTable(v) {
-  verifyTable.innerHTML = `
+function renderVerifyTable(tableEl, v) {
+  tableEl.innerHTML = `
     <thead>
       <tr><th>规则</th><th>计算值</th><th>目标值</th><th>结果</th></tr>
     </thead>
@@ -106,23 +128,67 @@ function renderVerifyTable(v) {
     </tbody>`;
 }
 
-function runCalc() {
+function loadStoredPuzzle() {
+  const raw = sessionStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function runPuzzleCalc() {
+  const puzzle = loadStoredPuzzle();
+  if (!puzzle) {
+    puzzleResultPanel.hidden = true;
+    setStatus(puzzleStatusEl, '暂无当前题目，请先在首页生成', 'error');
+    return;
+  }
+
+  try {
+    const { result, answer, verify: v } = solveFromStoredPuzzle(puzzle);
+    const { given, blank } = countGivenCells(puzzle);
+    const { p, m } = result.params;
+
+    puzzleTargetsEl.innerHTML = renderTargets(puzzle);
+    puzzleClueBoardEl.innerHTML = renderPuzzleBoard(puzzle, 'clues').html;
+    puzzleAnswerBoardEl.innerHTML = renderPuzzleBoard(answer, 'readonly').html;
+    renderDetailTable(puzzleDetailTable, result);
+    renderVerifyTable(puzzleVerifyTable, v);
+
+    puzzleResultPanel.hidden = false;
+    setStatus(
+      puzzleStatusEl,
+      v.ok
+        ? `计算完成 · 已知 ${given} 格 / 待填 ${blank} 格 · p=${p}, m=${m} · 左顶=${result.top.left}，右顶=${result.top.right}`
+        : `验算未通过，请重新生成题目`,
+      v.ok ? 'ok' : 'error',
+    );
+  } catch (err) {
+    puzzleResultPanel.hidden = true;
+    setStatus(puzzleStatusEl, err instanceof Error ? err.message : '计算失败', 'error');
+  }
+}
+
+function runManualCalc() {
   try {
     const opts = readForm();
     const result = solveDiamondPuzzle(opts);
-    const v = verify(result);
+    const v = verifyResult(result);
     const solution = toPuzzleSolution(result);
 
     targetsEl.innerHTML = renderTargets(solution);
     boardEl.innerHTML = renderPuzzleBoard(solution, 'readonly').html;
-    renderDetailTable(result);
-    renderVerifyTable(v);
+    renderDetailTable(detailTable, result);
+    renderVerifyTable(verifyTable, v);
 
     resultPanel.hidden = false;
 
     const { p, m, solvedFrom } = result.params;
     const mode = SOLVED_FROM_LABEL[solvedFrom] || solvedFrom;
     setStatus(
+      statusEl,
       v.ok
         ? `计算完成 · ${mode} · p=${p}, m=${m} · 左顶=${result.top.left}，右顶=${result.top.right} · 全部规则通过`
         : `计算完成，但有 ${v.failed.length} 条规则未通过（请检查输入）`,
@@ -130,26 +196,55 @@ function runCalc() {
     );
   } catch (err) {
     resultPanel.hidden = true;
-    setStatus(err instanceof Error ? err.message : '计算失败', 'error');
+    setStatus(statusEl, err instanceof Error ? err.message : '计算失败', 'error');
   }
+}
+
+function fillFormFromPuzzle() {
+  const puzzle = loadStoredPuzzle();
+  if (!puzzle) {
+    setStatus(statusEl, '暂无当前题目，请先在首页生成', 'error');
+    return;
+  }
+
+  const { config, p, m } = puzzle;
+  fillForm({
+    edgeLeft: config.edgeLeft,
+    penult: config.penult,
+    edgeRight: config.edgeRight,
+    anchor4: config.anchor4,
+    anchor6: config.anchor6,
+    bottom: config.bottom,
+    leftTop: puzzle.leftTop,
+    rightTop: puzzle.rightTop,
+    p,
+    m,
+  });
+  setStatus(statusEl, '已填入当前题目的全部参数（含 p、m）', 'info');
 }
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
-  runCalc();
+  runManualCalc();
 });
 
 form.elements.bottom.addEventListener('input', updatePmHint);
 form.elements.anchor6.addEventListener('input', updatePmHint);
 
 document.getElementById('reset-defaults').addEventListener('click', () => {
-  Object.entries(DEFAULTS).forEach(([k, v]) => {
-    form.elements[k].value = v;
-  });
-  updatePmHint();
-  setStatus('已恢复默认参数', 'info');
+  fillForm(EXAMPLE);
+  setStatus(statusEl, '已恢复示例参数', 'info');
   resultPanel.hidden = true;
 });
 
+document.getElementById('load-current').addEventListener('click', fillFormFromPuzzle);
+document.getElementById('calc-puzzle-btn').addEventListener('click', runPuzzleCalc);
+
 updatePmHint();
-runCalc();
+
+if (loadStoredPuzzle()) {
+  runPuzzleCalc();
+} else {
+  setStatus(puzzleStatusEl, '暂无题目，请先在首页生成', 'info');
+  runManualCalc();
+}
