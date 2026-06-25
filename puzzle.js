@@ -48,42 +48,255 @@ const DEFAULT_GIVEN_MASK = [
 const GIVEN_MASK = DEFAULT_GIVEN_MASK;
 
 const GIVEN_COUNT_BY_DIFFICULTY = {
-  easy: [12, 17],
-  medium: [5, 9],
-  hard: [3, 5],
+  /** 在必要锚点之外额外给出的格子数 */
+  easy: [6, 11],
+  medium: [0, 3],
+  hard: [0, 0],
 };
 
 /**
- * 创建空白已知格掩码（仅顶部目标和为已知）
- * @param {number[][]} rows
+ * 结构锚点位置 [行, 列] — 每题必须给出（定义题目参数）
+ * row0: 顶部目标和；row3: 锚4；row4: 左端/右二/右端；row5: 锚6；row6: 底
  */
+const ANCHOR_CELL_POSITIONS = [
+  [0, 0], [0, 1],
+  [3, 1],
+  [4, 0], [4, 4], [4, 5],
+  [5, 1],
+  [6, 0],
+];
+
+/** 创建必要锚点已知格掩码 */
+export function createRequiredAnchorMask(rows) {
+  return rows.map((row, ri) =>
+    row.map((_, ci) => ANCHOR_CELL_POSITIONS.some(([r, c]) => r === ri && c === ci)),
+  );
+}
+
+/** 是否包含全部必要锚点 */
+export function hasRequiredAnchors(givenMask) {
+  return ANCHOR_CELL_POSITIONS.every(([ri, ci]) => givenMask[ri]?.[ci] === true);
+}
+
+/** 创建空白已知格掩码（仅顶部目标和为已知） */
 export function createBlankGivenMask(rows) {
   return rows.map((row, ri) => row.map(() => ri === 0));
 }
 
+/** 检查候选解是否与已知格一致 */
+function gridMatchesClues(rows, mask, referenceRows) {
+  for (let ri = 0; ri < rows.length; ri++) {
+    for (let ci = 0; ci < rows[ri].length; ci++) {
+      if (!mask[ri]?.[ci]) continue;
+      if (rows[ri][ci] !== referenceRows[ri][ci]) return false;
+    }
+  }
+  return true;
+}
+
 /**
- * 随机生成已知格位置（锚点不再固定在同一格）
- * @param {'easy'|'medium'|'hard'} difficulty
- * @param {number[][]} rows
+ * 统计与已知格兼容的解的数量（枚举所有有效 p）
+ * @returns {{ count: number, matchingP: number[] }}
+ */
+export function countSolutionsMatchingClues(config, givenMask, referenceRows, difficulty = 'medium') {
+  const candidates = findValidPMCandidates(config, difficulty);
+  /** @type {number[]} */
+  const matchingP = [];
+
+  for (const p of candidates) {
+    const m = config.bottom - config.anchor6 - p;
+    const sol = solveFromParams(p, m, config);
+    if (gridMatchesClues(sol.rows, givenMask, referenceRows)) {
+      matchingP.push(p);
+    }
+  }
+
+  return { count: matchingP.length, matchingP };
+}
+
+/** 不同有效 p 之间数值有差异的格子（用于保证唯一解） */
+function cellsThatDifferBetweenCandidates(config, difficulty) {
+  const candidates = findValidPMCandidates(config, difficulty);
+  if (candidates.length <= 1) return [];
+
+  const grids = candidates.map((p) =>
+    solveFromParams(p, config.bottom - config.anchor6 - p, config).rows,
+  );
+
+  /** @type {[number, number][]} */
+  const diffCells = [];
+  for (let ri = 0; ri < grids[0].length; ri++) {
+    for (let ci = 0; ci < grids[0][ri].length; ci++) {
+      const values = new Set(grids.map((g) => g[ri][ci]));
+      if (values.size > 1) diffCells.push([ri, ci]);
+    }
+  }
+  return diffCells;
+}
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function countGivenInMask(mask) {
+  return mask.flat().filter(Boolean).length;
+}
+
+/** 必要锚点单独给出时是否已能唯一确定解 */
+function configSupportsUniqueWithAnchors(config, difficulty) {
+  const candidates = findValidPMCandidates(config, difficulty);
+  if (candidates.length === 0) return false;
+  if (candidates.length === 1) return true;
+
+  const p = candidates[0];
+  const sol = solveFromParams(p, config.bottom - config.anchor6 - p, config);
+  const anchorMask = createRequiredAnchorMask(sol.rows);
+  return countSolutionsMatchingClues(config, anchorMask, sol.rows, difficulty).count === 1;
+}
+
+/**
+ * 生成保证唯一解的已知格掩码（必要锚点始终给出）
+ */
+export function generateUniqueGivenMask(config, solution, difficulty) {
+  const { rows } = solution;
+  const [minExtra, maxExtra] = GIVEN_COUNT_BY_DIFFICULTY[difficulty] || GIVEN_COUNT_BY_DIFFICULTY.medium;
+  const discriminating = cellsThatDifferBetweenCandidates(config, difficulty).filter(
+    ([ri, ci]) => !ANCHOR_CELL_POSITIONS.some(([r, c]) => r === ri && c === ci),
+  );
+
+  /** 可选额外已知格（非锚点） */
+  const optionalPool = [];
+  rows.forEach((row, ri) => {
+    row.forEach((_, ci) => {
+      if (!ANCHOR_CELL_POSITIONS.some(([r, c]) => r === ri && c === ci)) {
+        optionalPool.push([ri, ci]);
+      }
+    });
+  });
+
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const mask = createRequiredAnchorMask(rows);
+
+    if (countSolutionsMatchingClues(config, mask, rows, difficulty).count !== 1) {
+      for (const [ri, ci] of shuffleArray(discriminating.length ? discriminating : optionalPool)) {
+        if (mask[ri][ci]) continue;
+        mask[ri][ci] = true;
+        if (countSolutionsMatchingClues(config, mask, rows, difficulty).count === 1) break;
+      }
+    }
+
+    if (countSolutionsMatchingClues(config, mask, rows, difficulty).count !== 1) continue;
+
+    const targetExtra = randomIn([minExtra, maxExtra]);
+    let added = 0;
+    for (const [ri, ci] of shuffleArray(optionalPool)) {
+      if (added >= targetExtra) break;
+      if (mask[ri][ci]) continue;
+      mask[ri][ci] = true;
+      if (countSolutionsMatchingClues(config, mask, rows, difficulty).count !== 1) {
+        mask[ri][ci] = false;
+      } else {
+        added += 1;
+      }
+    }
+
+    if (
+      hasRequiredAnchors(mask)
+      && countSolutionsMatchingClues(config, mask, rows, difficulty).count === 1
+    ) {
+      return mask;
+    }
+  }
+
+  return buildDeterministicUniqueMask(config, solution, difficulty, minExtra, maxExtra);
+}
+
+/** 确定性兜底：必要锚点 + 逐步添加直至唯一 */
+function buildDeterministicUniqueMask(config, solution, difficulty, minExtra, maxExtra) {
+  const { rows } = solution;
+  const mask = createRequiredAnchorMask(rows);
+  const discriminating = cellsThatDifferBetweenCandidates(config, difficulty);
+
+  const pool = [];
+  rows.forEach((row, ri) => row.forEach((_, ci) => pool.push([ri, ci])));
+
+  for (const [ri, ci] of [...discriminating, ...pool]) {
+    if (countSolutionsMatchingClues(config, mask, rows, difficulty).count === 1) break;
+    if (!mask[ri][ci]) mask[ri][ci] = true;
+  }
+
+  let added = 0;
+  for (const [ri, ci] of pool) {
+    if (added >= maxExtra) break;
+    if (mask[ri][ci]) continue;
+    mask[ri][ci] = true;
+    if (countSolutionsMatchingClues(config, mask, rows, difficulty).count !== 1) {
+      mask[ri][ci] = false;
+    } else {
+      added += 1;
+    }
+  }
+
+  while (
+    added < minExtra
+    && countSolutionsMatchingClues(config, mask, rows, difficulty).count === 1
+  ) {
+    const next = pool.find(([ri, ci]) => !mask[ri][ci]);
+    if (!next) break;
+    const [ri, ci] = next;
+    mask[ri][ci] = true;
+    if (countSolutionsMatchingClues(config, mask, rows, difficulty).count !== 1) {
+      mask[ri][ci] = false;
+      break;
+    }
+    added += 1;
+  }
+
+  if (countSolutionsMatchingClues(config, mask, rows, difficulty).count !== 1) {
+    throw new Error('无法为当前参数构建含必要锚点的唯一解题目');
+  }
+
+  return mask;
+}
+
+/** 验证题目已知格是否对应唯一解且含必要锚点 */
+export function validatePuzzleUniqueness(solution) {
+  const { config, rows, givenMask, p } = solution;
+  if (!givenMask) return { unique: false, count: 0, hasAnchors: false };
+
+  if (!hasRequiredAnchors(givenMask)) {
+    return { unique: false, count: 0, hasAnchors: false, matchingP: [] };
+  }
+
+  const difficulty = config.difficulty || 'medium';
+  const { count, matchingP } = countSolutionsMatchingClues(config, givenMask, rows, difficulty);
+  return {
+    unique: count === 1 && matchingP[0] === p,
+    hasAnchors: true,
+    count,
+    matchingP,
+  };
+}
+
+/**
+ * @deprecated 使用 generateUniqueGivenMask
+ * 随机生成已知格位置（不保证唯一解）
  */
 export function generateRandomGivenMask(difficulty, rows) {
   const mask = createBlankGivenMask(rows);
-  /** @type {[number, number][]} */
   const pool = [];
-
   rows.forEach((row, ri) => {
     if (ri === 0) return;
     row.forEach((_, ci) => pool.push([ri, ci]));
   });
-
   const [minG, maxG] = GIVEN_COUNT_BY_DIFFICULTY[difficulty] || GIVEN_COUNT_BY_DIFFICULTY.medium;
   const count = Math.min(pool.length - 1, randomIn([minG, maxG]));
-
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  shuffled.slice(0, count).forEach(([ri, ci]) => {
-    mask[ri][ci] = true;
-  });
-
+  shuffleArray(pool).slice(0, count).forEach(([ri, ci]) => { mask[ri][ci] = true; });
   return mask;
 }
 
@@ -208,9 +421,9 @@ export function generateRandomConfig(difficulty = 'medium', maxAttempts = 400) {
       difficulty,
     };
 
-    if (findValidPMCandidates(config, difficulty).length > 0) {
-      return config;
-    }
+    if (!configSupportsUniqueWithAnchors(config, difficulty)) continue;
+
+    return config;
   }
 
   throw new Error('无法随机生成有效题目参数，请重试。');
@@ -472,29 +685,45 @@ export function validateSolution(solution) {
     m: solution.m,
   });
   const v = verifyResult(result);
-  return { valid: v.ok, errors: v.failed.map((d) => `${d.name}: ${d.actual} ≠ ${d.expected}`) };
+  const uniqueness = validatePuzzleUniqueness(solution);
+  const errors = v.failed.map((d) => `${d.name}: ${d.actual} ≠ ${d.expected}`);
+  if (!uniqueness.hasAnchors) {
+    errors.push('缺少必要锚点（第4/6行锚点、第5行边缘数、底目标和）');
+  }
+  if (!uniqueness.unique) {
+    errors.push(`已知格对应 ${uniqueness.count} 个解，非唯一解`);
+  }
+  return {
+    valid: v.ok && uniqueness.unique && uniqueness.hasAnchors,
+    errors,
+    uniqueness,
+  };
 }
 
 /**
- * 随机生成一道有效题目
+ * 随机生成一道有效题目（保证已知格对应唯一解）
  * @param {{ difficulty?: 'easy'|'medium'|'hard' }} [options]
  */
 export function generatePuzzle(options = {}) {
   const difficulty = options.difficulty || 'medium';
-  const config = generateRandomConfig(difficulty);
-  const candidates = findValidPMCandidates(config, difficulty);
+  const maxAttempts = 100;
 
-  if (candidates.length === 0) {
-    throw new Error('无法在给定参数下生成正整数解，请重试。');
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const config = generateRandomConfig(difficulty);
+    const candidates = findValidPMCandidates(config, difficulty);
+    if (candidates.length === 0) continue;
+
+    const p = candidates[Math.floor(Math.random() * candidates.length)];
+    const m = config.bottom - config.anchor6 - p;
+    const solution = solveFromParams(p, m, config);
+    const givenMask = generateUniqueGivenMask(config, solution, difficulty);
+    const puzzle = { ...solution, givenMask };
+
+    const { unique, hasAnchors } = validatePuzzleUniqueness(puzzle);
+    if (unique && hasAnchors) return puzzle;
   }
 
-  const p = candidates[Math.floor(Math.random() * candidates.length)];
-  const m = config.bottom - config.anchor6 - p;
-
-  const solution = solveFromParams(p, m, config);
-  const givenMask = generateRandomGivenMask(difficulty, solution.rows);
-
-  return { ...solution, givenMask };
+  throw new Error('无法生成唯一解题目，请重试。');
 }
 
 const PUZZLE_LINKS = [

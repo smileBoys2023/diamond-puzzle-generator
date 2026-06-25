@@ -6,6 +6,11 @@ export {
   solveDiamondPuzzle,
   solveFromStoredPuzzle,
   countGivenCells,
+  countSolutionsMatchingClues,
+  validatePuzzleUniqueness,
+  generateUniqueGivenMask,
+  createRequiredAnchorMask,
+  hasRequiredAnchors,
   verifyResult as verify,
   toPuzzleSolution,
 } from './puzzle.js';
